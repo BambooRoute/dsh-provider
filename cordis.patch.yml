@@ -1,0 +1,3 @@
+- insert:
+    - id: bambooroute
+      name: '@bambooroute/dsh-provider'

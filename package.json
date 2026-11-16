@@ -1,0 +1,52 @@
+{
+  "name": "@bambooroute/dsh-provider",
+  "version": "0.1.0",
+  "description": "Connect BambooRoute to the DeepSeek Harness model picker",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.cjs",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "account.mjs",
+    "adapter.mjs",
+    "client.cjs",
+    "cordis.patch.yml",
+    "locale/*.json"
+  ],
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": "0.2.2-rc.3"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-authorization": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm-pi-ai": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.3",
+    "@earendil-works/pi-ai": "^1.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-authorization": { "optional": true },
+    "@deepseek-ai/dsh-credentials": { "optional": true },
+    "@deepseek-ai/dsh-llm": { "optional": true },
+    "@deepseek-ai/dsh-llm-pi-ai": { "optional": true },
+    "@deepseek-ai/dsh-typert-protocol": { "optional": true },
+    "@earendil-works/pi-ai": { "optional": true }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "3.19.0",
+    "zod": "4.6.7"
+  }
+}

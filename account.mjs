@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { createHash } from 'node:crypto'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 
-export const currencies = ['USD', 'CNY']
+export const currencies = ['CNY', 'USD']
 const validToken = value => typeof value === 'string' && /^bbr-[A-Za-z0-9_-]{32,128}$/.test(value)
 const validCode = value => typeof value === 'string' && /^[A-Z2-7]{4}-[A-Z2-7]{4}$/.test(value)
 
@@ -228,8 +228,9 @@ export class BambooAccount {
       const grant = await this.grant()
       if (grant) {
         await this.revoke(grant.token)
-        await this.ctx.credentials.modifyRecord(this.key, async current =>
-          this.grantFrom(current)?.token === grant.token ? undefined : current)
+        await this.ctx.credentials.modifyRecord(this.key, async current => {
+          if (this.grantFrom(current)?.token === grant.token) return { kind: 'grant', payload: null }
+        })
       }
     } catch {
       this.error = 'BambooRoute could not disconnect this device. Try again or revoke the key on BambooRoute.'

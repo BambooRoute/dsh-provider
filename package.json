@@ -1,6 +1,6 @@
 {
   "name": "@bambooroute/dsh-provider",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connect BambooRoute to the DeepSeek Harness model picker",
   "type": "module",
   "exports": {

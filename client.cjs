@@ -5,7 +5,7 @@ window.__ModuleLoader__.load({
 
     function AccountPanel({ call, t }) {
       const [state, setState] = useState()
-      const [currency, setCurrency] = useState('')
+      const [selectedCurrency, setSelectedCurrency] = useState()
       const [busy, setBusy] = useState(false)
       const [error, setError] = useState('')
       const connecting = state?.connecting === true
@@ -36,7 +36,9 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError('')
         try {
-          setState(await call(method, args))
+          const next = await call(method, args)
+          if (method === 'disconnect' && !next.currency) setSelectedCurrency(undefined)
+          setState(next)
         } catch {
           setError(t('actionError'))
         } finally {
@@ -49,6 +51,9 @@ window.__ModuleLoader__.load({
           ? h('p', { role: 'alert' }, error, ' ', h('button', { type: 'button', onClick: () => void perform('status') }, t('retry')))
           : h('p', { role: 'status' }, t('loading')))
       }
+
+      const connectedCurrency = state.connected ? state.currency : undefined
+      const currency = selectedCurrency ?? connectedCurrency ?? 'CNY'
 
       return h('section', { style: { display: 'grid', gap: '0.75rem', maxWidth: '36rem' } },
         h('p', { role: 'status', style: { margin: 0 } },
@@ -63,11 +68,10 @@ window.__ModuleLoader__.load({
           h('button', { type: 'button', disabled: busy, onClick: () => void perform('cancel') }, t('cancel')),
         ) : h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' } },
           h('label', null, t('currency'), ' ',
-            h('select', { value: currency, disabled: busy, onChange: event => setCurrency(event.target.value) },
-              h('option', { value: '' }, t('choose')),
-              h('option', { value: 'USD' }, 'USD'),
-              h('option', { value: 'CNY' }, 'CNY'))),
-          h('button', { type: 'button', disabled: busy || !currency, onClick: () => void perform('start', { currency }) },
+            h('select', { value: currency, disabled: busy, onChange: event => setSelectedCurrency(event.target.value) },
+              h('option', { value: 'CNY' }, 'CNY'),
+              h('option', { value: 'USD' }, 'USD'))),
+          h('button', { type: 'button', disabled: busy, onClick: () => void perform('start', { currency }) },
             state.connected ? t('reconnect') : t('connect')),
           state.connected ? h('button', { type: 'button', disabled: busy, onClick: () => void perform('refresh') }, t('refresh')) : null,
           state.expiresAt ? h('button', { type: 'button', disabled: busy, onClick: () => void perform('disconnect') }, t('disconnect')) : null,
@@ -89,7 +93,6 @@ window.__ModuleLoader__.load({
       open: 'Open BambooRoute authorization',
       cancel: 'Cancel',
       currency: 'Billing currency',
-      choose: 'Choose currency',
       connect: 'Connect',
       reconnect: 'Reconnect',
       refresh: 'Refresh models',
@@ -109,7 +112,6 @@ window.__ModuleLoader__.load({
       open: '打开 BambooRoute 授权页',
       cancel: '取消',
       currency: '扣费币种',
-      choose: '选择币种',
       connect: '连接',
       reconnect: '重新连接',
       refresh: '刷新模型',

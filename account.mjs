@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { createHash } from 'node:crypto'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 
-export const currencies = ['CNY', 'USD']
+const billingCurrency = 'CNY'
 const validToken = value => typeof value === 'string' && /^bbr-[A-Za-z0-9_-]{32,128}$/.test(value)
 const validCode = value => typeof value === 'string' && /^[A-Z2-7]{4}-[A-Z2-7]{4}$/.test(value)
 
@@ -81,41 +81,44 @@ export class BambooAccount {
   grantFrom(record) {
     const grant = record?.kind === 'grant' ? record.payload : undefined
     if (!grant || grant.site !== this.site || grant.gateway !== this.gateway || !validToken(grant.token)
-      || !currencies.includes(grant.currency) || !Number.isFinite(grant.expiresAt)) return undefined
+      || (grant.currency !== billingCurrency && grant.currency !== 'USD') || !Number.isFinite(grant.expiresAt)) return undefined
     return grant
   }
 
-  async grant() {
+  async storedGrant() {
     return this.grantFrom(await this.ctx.credentials.readRecord(this.key))
   }
 
+  async grant() {
+    const grant = await this.storedGrant()
+    if (grant?.currency === billingCurrency) return grant
+  }
+
   async status() {
-    const grant = await this.grant()
+    const grant = await this.storedGrant()
     const attempt = this.attempt
     const credential = !grant ? {} : {
-      currency: grant.currency,
       expiresAt: grant.expiresAt,
-      connected: grant.expiresAt > Date.now(),
+      connected: grant.currency === billingCurrency && grant.expiresAt > Date.now(),
+      reconnectRequired: grant.currency !== billingCurrency,
     }
     return {
       ...credential,
       ...(attempt && {
         connecting: true,
-        pendingCurrency: attempt.currency,
         ...(attempt.url && { url: attempt.url, code: attempt.code }),
       }),
       ...(this.error && { error: this.error }),
     }
   }
 
-  start(currency) {
-    if (!currencies.includes(currency)) throw new Error('Choose USD or CNY.')
+  start() {
     if (this.attempt || this.disconnecting) return this.status()
     if (this.activeCalls > 0) {
       this.error = 'Finish or stop the current BambooRoute response before reconnecting.'
       return this.status()
     }
-    const attempt = { currency, controller: new AbortController() }
+    const attempt = { controller: new AbortController() }
     this.attempt = attempt
     this.error = undefined
     this.ctx.authorization.begin({
@@ -123,7 +126,6 @@ export class BambooAccount {
       method: 'browser',
       signal: attempt.controller.signal,
       interaction: {
-        prompt: async () => currency,
         notify: ({ url, code }) => { Object.assign(attempt, { url, code }) },
       },
     }).catch(error => {
@@ -142,20 +144,14 @@ export class BambooAccount {
   }
 
   async authorize(session) {
-    const currency = await session.prompt({
-      kind: 'select',
-      message: 'Choose a billing currency.',
-      options: currencies.map(id => ({ id, label: id })),
-    })
-    if (!currencies.includes(currency)) throw new BambooClientError('Choose USD or CNY.')
     session.signal.throwIfAborted()
     const started = await request(this.site, '/api/desktop/authorizations', {
-      method: 'POST', body: { name: 'DeepSeek Harness — BambooRoute', currency }, signal: session.signal,
+      method: 'POST', body: { name: 'DeepSeek Harness — BambooRoute', currency: billingCurrency }, signal: session.signal,
     })
     const deviceCode = started?.device_code
     const expiresIn = started?.expires_in
     const interval = started?.interval
-    if (started?.currency !== currency || typeof deviceCode !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(deviceCode)
+    if (started?.currency !== billingCurrency || typeof deviceCode !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(deviceCode)
       || !validCode(started.user_code) || started.verification_uri !== this.site + '/desktop/authorize'
       || !Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > 900
       || !Number.isInteger(interval) || interval < 1 || interval > expiresIn) {
@@ -174,7 +170,7 @@ export class BambooAccount {
         const result = await request(this.site, '/api/desktop/token', { method: 'POST', body })
         if (result?.status === 'pending') continue
         exchanged = true
-        await this.saveGrant(result, currency, session.signal)
+        await this.saveGrant(result, session.signal)
         return
       }
       throw new BambooClientError('This connection request expired. Start again.')
@@ -183,15 +179,15 @@ export class BambooAccount {
     }
   }
 
-  async saveGrant(result, currency, signal) {
+  async saveGrant(result, signal) {
     const token = result?.token
     const expiresAt = Date.parse(result?.expires_at)
     let previous
     try {
-      if (!validToken(token) || result.currency !== currency || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      if (!validToken(token) || result.currency !== billingCurrency || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
         throw new BambooClientError('BambooRoute returned an invalid connection.')
       }
-      const grant = { token, currency, expiresAt, site: this.site, gateway: this.gateway }
+      const grant = { token, currency: billingCurrency, expiresAt, site: this.site, gateway: this.gateway }
       await this.ctx.credentials.modifyRecord(this.key, async current => {
         signal.throwIfAborted()
         previous = this.grantFrom(current)
@@ -225,7 +221,7 @@ export class BambooAccount {
     this.disconnecting = true
     this.error = undefined
     try {
-      const grant = await this.grant()
+      const grant = await this.storedGrant()
       if (grant) {
         await this.revoke(grant.token)
         await this.ctx.credentials.modifyRecord(this.key, async current => {

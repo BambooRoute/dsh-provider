@@ -1,7 +1,7 @@
 import Schema from '@deepseek-ai/schemastery'
 import { TypertRemoteService, createTypertRemoteInfo } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
-import { BambooAccount, currencies } from './account.mjs'
+import { BambooAccount } from './account.mjs'
 import { BambooAdapter, providerId } from './adapter.mjs'
 
 export const name = 'bambooroute'
@@ -12,28 +12,22 @@ export const Config = Schema.object({
 })
 
 const packageName = '@bambooroute/dsh-provider'
-const currencyCodec = { mode: 'strict', typeSymbol: packageName + '#BillingCurrency', create: () => z.enum(currencies) }
 const stateCodec = { mode: 'strict', typeSymbol: packageName + '#ConnectionState', create: () => z.object({
   connected: z.boolean().optional(),
-  currency: z.enum(currencies).optional(),
+  reconnectRequired: z.boolean().optional(),
   expiresAt: z.number().optional(),
   connecting: z.boolean().optional(),
-  pendingCurrency: z.enum(currencies).optional(),
   url: z.string().optional(),
   code: z.string().optional(),
   modelCount: z.number().int().nonnegative().optional(),
   error: z.string().optional(),
 }) }
 const stateMethod = { service: 'bambooRoute', invocation: { kind: 'direct' }, parameters: [], result: stateCodec }
-const startMethod = {
-  ...stateMethod,
-  parameters: [{ name: 'currency', source: 'json', codec: currencyCodec, strictCodec: currencyCodec }],
-}
 const remote = createTypertRemoteInfo({
   package: packageName,
   methods: {
     'bambooRoute/status': stateMethod,
-    'bambooRoute/start': startMethod,
+    'bambooRoute/start': stateMethod,
     'bambooRoute/cancel': stateMethod,
     'bambooRoute/disconnect': stateMethod,
     'bambooRoute/refresh': stateMethod,
@@ -58,8 +52,8 @@ class BambooSettings extends TypertRemoteService {
     }
   }
 
-  start(currency) {
-    return this.account.start(currency)
+  start() {
+    return this.account.start()
   }
 
   cancel() {
